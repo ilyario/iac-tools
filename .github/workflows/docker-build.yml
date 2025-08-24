@@ -6,6 +6,7 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -44,6 +45,7 @@ jobs:
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
           type=sha
+          type=raw,value=latest,enable={{is_default_branch}}
 
     - name: Build and push Docker image
       uses: docker/build-push-action@v5
@@ -65,4 +67,3 @@ jobs:
         docker run --rm iac-tools-test kubectl version --client
         docker run --rm iac-tools-test helm version
         docker run --rm iac-tools-test helmfile version
-        docker run --rm iac-tools-test ansible --version
