@@ -5,6 +5,7 @@ FROM alpine:3.19
 ARG KUBECTL_VERSION=v1.33.0
 ARG HELM_VERSION=v3.14.0
 ARG HELMFILE_VERSION=v1.1.5
+ARG AH_HELM_CHARTS_VERSION=1.0.1
 
 # Устанавливаем необходимые пакеты
 RUN apk add --no-cache \
@@ -50,7 +51,7 @@ RUN kubectl version --client && \
     helmfile version
 
 # Клонируем helm charts репозиторий и копируем только папку charts
-RUN git clone https://github.com/ilyario/ah-helm-charts.git /tmp/charts-repo && \
+RUN git clone --depth 1 --branch ${AH_HELM_CHARTS_VERSION} https://github.com/ilyario/ah-helm-charts.git /tmp/charts-repo && \
     cp -r /tmp/charts-repo/charts/* /workspace/charts/ && \
     rm -rf /tmp/charts-repo
 
