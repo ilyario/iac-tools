@@ -5,7 +5,7 @@ FROM alpine:3.19
 ARG KUBECTL_VERSION=v1.33.0
 ARG HELM_VERSION=v3.14.0
 ARG HELMFILE_VERSION=v1.1.5
-ARG AH_HELM_CHARTS_VERSION=1.0.1
+ARG AH_HELM_CHARTS_VERSION=1.1.0
 
 # Устанавливаем необходимые пакеты
 RUN apk add --no-cache \
