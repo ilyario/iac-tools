@@ -1,13 +1,14 @@
-# Используем Alpine Linux как базовый образ для минимального размера
-FROM alpine:3.19
+# Первый стейдж: сборка и установка инструментов
+FROM alpine:3.19 AS builder
 
-# Определяем build arguments для версий
+# Определяем build arguments для версий в builder стейдже
 ARG KUBECTL_VERSION=v1.33.0
-ARG HELM_VERSION=v3.14.0
+ARG HELM_VERSION=v3.15.0
+ARG HELM_DIFF_VERSION=v3.8.1
 ARG HELMFILE_VERSION=v1.1.5
 ARG AH_HELM_CHARTS_VERSION=1.1.0
 
-# Устанавливаем необходимые пакеты
+# Устанавливаем необходимые пакеты для сборки
 RUN apk add --no-cache \
     curl \
     bash \
@@ -25,9 +26,9 @@ RUN curl -fsSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" | t
     && mv linux-amd64/helm /usr/local/bin/ \
     && rm -rf linux-amd64
 
-# Устанавливаем helm-diff плагин
-RUN helm plugin install https://github.com/databus23/helm-diff
+RUN helm plugin install https://github.com/databus23/helm-diff --version ${HELM_DIFF_VERSION}
 
+# Устанавливаем helmfile
 RUN curl -fsSL -o /tmp/helmfile.tar.gz \
     "https://github.com/helmfile/helmfile/releases/download/${HELMFILE_VERSION}/helmfile_${HELMFILE_VERSION#v}_linux_amd64.tar.gz" && \
     tar -xzf /tmp/helmfile.tar.gz -C /tmp && \
@@ -35,14 +36,8 @@ RUN curl -fsSL -o /tmp/helmfile.tar.gz \
     chmod +x /usr/local/bin/helmfile && \
     rm -rf /tmp/helmfile.tar.gz /tmp/helmfile
 
-# Создаем рабочую директорию
-WORKDIR /workspace
-
-# Создаем директорию для charts
-RUN mkdir -p /workspace/charts
-
-# Устанавливаем bash как оболочку по умолчанию
-SHELL ["/bin/bash", "-c"]
+# Клонируем helm charts репозиторий
+RUN git clone --depth 1 --branch ${AH_HELM_CHARTS_VERSION} https://github.com/ilyario/ah-helm-charts.git /tmp/charts-repo
 
 # Проверяем установку всех инструментов
 RUN kubectl version --client && \
@@ -50,10 +45,32 @@ RUN kubectl version --client && \
     helm plugin list | grep diff && \
     helmfile version
 
-# Клонируем helm charts репозиторий и копируем только папку charts
-RUN git clone --depth 1 --branch ${AH_HELM_CHARTS_VERSION} https://github.com/ilyario/ah-helm-charts.git /tmp/charts-repo && \
-    cp -r /tmp/charts-repo/charts/* /workspace/charts/ && \
-    rm -rf /tmp/charts-repo
+# Второй стейдж: финальный минимальный образ
+FROM alpine:3.19 AS runtime
+
+# Устанавливаем только необходимые runtime пакеты
+RUN apk add --no-cache \
+    bash \
+    ca-certificates \
+    && rm -rf /var/cache/apk/*
+
+# Копируем установленные инструменты из builder стейджа
+COPY --from=builder /usr/local/bin/kubectl /usr/local/bin/
+COPY --from=builder /usr/local/bin/helm /usr/local/bin/
+COPY --from=builder /usr/local/bin/helmfile /usr/local/bin/
+COPY --from=builder /root/.local/share/helm/plugins/ /root/.local/share/helm/plugins/
+
+# Создаем рабочую директорию
+WORKDIR /workspace
+
+# Создаем директорию для charts
+RUN mkdir -p /workspace/charts
+
+# Копируем charts из builder стейджа
+COPY --from=builder /tmp/charts-repo/charts/ /workspace/charts/
+
+# Устанавливаем bash как оболочку по умолчанию
+SHELL ["/bin/bash", "-c"]
 
 # Команда по умолчанию
 CMD ["/bin/bash"]
